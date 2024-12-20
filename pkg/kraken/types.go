@@ -2,6 +2,7 @@ package kraken
 
 import (
 	"fmt"
+	"time"
 )
 
 // REST API types
@@ -87,12 +88,15 @@ func (r *OrderRequest) Validate() error {
 	return nil
 }
 
-type TrailingEntryParams struct {
-	Pair           string
-	Side           string
-	EntryPrice     float64
-	TrailingAmount float64
-	Volume         float64
-	Distribution   string
-	OrderCount     int
+type TrailingEntryConfig struct {
+	Pair         string
+	Side         string
+	UpperBand    float64
+	LowerBand    float64
+	TotalVolume  float64
+	NumOrders    int
+	Distribution VolumeDistribution
+	Interval     time.Duration
+	Leverage     string
+	Weights      []float64
 }

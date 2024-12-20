@@ -358,18 +358,6 @@ func (c *Client) GetTickerPrice(ctx context.Context, pair string) (*TickerInfo, 
 	}, nil
 }
 
-type TrailingEntryConfig struct {
-	Pair         string
-	Side         string
-	UpperBand    float64
-	LowerBand    float64
-	TotalVolume  float64
-	NumOrders    int
-	Interval     time.Duration
-	Distribution VolumeDistribution
-	Weights      []float64 // Optional custom weights
-}
-
 func calculateOrderVolumes(config TrailingEntryConfig) []float64 {
 	volumes := make([]float64, config.NumOrders)
 
