@@ -36,13 +36,13 @@ KRAKEN_API_SECRET=your_api_secret_here
 
 ### Place a Limit Order
 
-#### Buy 0.002 ETH at $1000
+Buy 0.002 ETH at $1000
 
 ```bash
 ./kraken-trader place-order --pair ETH/USD --side buy --price 1000 --volume 0.002
 ```
 
-#### Sell 0.1 BTC at $200000
+Sell 0.1 BTC at $200000
 
 ```bash
 ./kraken-trader order --pair BTC/USD --side sell --price 200000 --volume 0.1
@@ -50,7 +50,7 @@ KRAKEN_API_SECRET=your_api_secret_here
 
 ### Place a Market Order
 
-#### Buy 0.002 ETH at market price
+Buy 0.002 ETH at market price
 
 ```bash
 ./kraken-trader order --pair ETH/USD --side buy --volume 0.002
@@ -58,13 +58,13 @@ KRAKEN_API_SECRET=your_api_secret_here
 
 ### Trailing Entry Orders
 
-#### Buy when price enters $45000-$50000 range
+Buy when price enters $45000-$50000 range
 
 ```bash
 ./kraken-trader trailing --pair BTC/USD --side buy --upper 50000 --lower 45000 --volume 0.01 --orders 5
 ```
 
-#### Sell when price enters $45000-$50000 range
+Sell when price enters $45000-$50000 range
 
 ```bash
 ./kraken-trader trailing --pair BTC/USD --side sell --upper 50000 --lower 45000 --volume 0.01 --orders 5
