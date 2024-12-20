@@ -331,8 +331,37 @@ func (c *Client) ExecuteTrailingEntry(ctx context.Context, config TrailingEntryC
 
 	for price := range priceChan {
 		if price >= config.LowerBand && price <= config.UpperBand {
-			// Place orders logic...
-			// Same as before, but using real-time price updates
+			for i := 0; i < config.NumOrders; i++ {
+				var orderPrice float64
+				if config.Side == "buy" {
+					orderPrice = config.UpperBand - (float64(i) * priceStep)
+				} else {
+					orderPrice = config.LowerBand + (float64(i) * priceStep)
+				}
+
+				if placedPrices[orderPrice] {
+					continue
+				}
+
+				req := OrderRequest{
+					Pair:   config.Pair,
+					Type:   "limit",
+					Side:   config.Side,
+					Volume: strconv.FormatFloat(volumes[i], 'f', 8, 64),
+					Price:  strconv.FormatFloat(orderPrice, 'f', 2, 64),
+				}
+
+				if _, err := c.AddOrder(ctx, req); err != nil {
+					return fmt.Errorf("failed to place order: %w", err)
+				}
+
+				placedPrices[orderPrice] = true
+				fmt.Printf("Placed %s order: %v %v at %v\n",
+					config.Side, volumes[i], config.Pair, orderPrice)
+			}
+
+			// All orders placed, we're done
+			return nil
 		}
 	}
 
