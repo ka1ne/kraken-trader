@@ -11,6 +11,8 @@ var (
 	cfgFile string
 	apiKey  string
 	apiSec  string
+	side    string
+	pair    string
 )
 
 var rootCmd = &cobra.Command{

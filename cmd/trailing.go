@@ -19,8 +19,6 @@ var (
 	numOrders    int
 	totalVolume  string
 	timeInterval string
-	side         string
-	pair         string
 	distribution string
 )
 
@@ -104,8 +102,6 @@ func init() {
 	trailingCmd.Flags().IntVar(&numOrders, "orders", 5, "Number of orders to place")
 	trailingCmd.Flags().StringVar(&totalVolume, "volume", "", "Total volume to be split across orders")
 	trailingCmd.Flags().StringVar(&timeInterval, "interval", "1m", "Check interval")
-	trailingCmd.Flags().StringVar(&side, "side", "", "Order side (buy/sell)")
-	trailingCmd.Flags().StringVar(&pair, "pair", "", "Trading pair (e.g., XBTUSD)")
 	trailingCmd.Flags().StringVar(&distribution, "distribution", "even",
 		"Volume distribution (even, normal, custom)")
 
