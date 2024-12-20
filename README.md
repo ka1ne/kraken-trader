@@ -1,46 +1,98 @@
-# kraken-trader
-A Go app to aid trading on Kraken
+# Kraken Trader
 
-+ ## Testing
-+ 
-+ The project includes both unit tests and integration tests. Integration tests require Kraken API demo credentials.
-+ 
-+ ### Prerequisites
-+ 
-+ Install the test runner:
-+ ```bash
-+ make install-tools
-+ ```
-+ 
-+ ### Running Tests
-+ 
-+ ```bash
-+ # Run unit tests only (fast, no credentials needed)
-+ make test
-+ 
-+ # Run integration tests only (requires KRAKEN_DEMO_KEY and KRAKEN_DEMO_SECRET)
-+ make test-integration
-+ 
-+ # Run all tests
-+ make test-all
-+ 
-+ # Generate test coverage report
-+ make test-coverage
-+ ```
-+ 
-+ ### Setting Up Integration Tests
-+ 
-+ 1. Get demo API credentials from [Kraken's Testing Environment](https://support.kraken.com/hc/en-us/articles/360024809011-API-Testing-Environment)
-+ 2. Set environment variables:
-+    ```bash
-+    export KRAKEN_DEMO_KEY="your_demo_key"
-+    export KRAKEN_DEMO_SECRET="your_demo_secret"
-+    ```
-+ 
-+ Integration tests will be skipped if credentials are not provided.
-+ 
-+ ### Test Timeouts
-+ 
-+ - Unit tests: 10 seconds
-+ - Integration tests: 30 seconds
-+ - Full test suite: Should complete within 1 minute
+A CLI tool for automated trading on Kraken exchange.
+
+## Installation
+
+Clone the repository
+
+```bash
+git clone https://github.com/ka1ne/kraken-trader
+cd kraken-trader
+```
+
+Install dependencies
+
+```bash
+go mod download
+```
+
+Build
+
+```bash
+go build -o kraken-trader
+```
+
+## Configuration
+
+Create a `.env` file in the project root:
+
+```bash
+KRAKEN_API_KEY=your_api_key_here
+KRAKEN_API_SECRET=your_api_secret_here
+```
+
+## Usage
+
+### Place a Limit Order
+
+#### Buy 0.002 ETH at $1000
+
+```bash
+./kraken-trader place-order --pair ETH/USD --side buy --price 1000 --volume 0.002
+```
+
+#### Sell 0.1 BTC at $200000
+
+```bash
+./kraken-trader order --pair BTC/USD --side sell --price 200000 --volume 0.1
+```
+
+### Place a Market Order
+
+#### Buy 0.002 ETH at market price
+
+```bash
+./kraken-trader order --pair ETH/USD --side buy --volume 0.002
+```
+
+### Trailing Entry Orders
+
+#### Buy when price enters $45000-$50000 range
+
+```bash
+./kraken-trader trailing --pair BTC/USD --side buy --upper 50000 --lower 45000 --volume 0.01 --orders 5
+```
+
+#### Sell when price enters $45000-$50000 range
+
+```bash
+./kraken-trader trailing --pair BTC/USD --side sell --upper 50000 --lower 45000 --volume 0.01 --orders 5
+```
+
+## Development
+
+### Install tools
+
+```bash
+make install-tools
+```
+
+
+### Run tests
+
+```bash
+make test
+```
+
+### Run integration tests
+
+```bash
+make test-integration
+```
+
+### Generate test coverage
+
+```bash
+make test-coverage
+```
