@@ -11,8 +11,6 @@ import (
 
 var (
 	orderType string
-	side      string
-	pair      string
 	volume    string
 	price     string
 	leverage  string
@@ -47,7 +45,7 @@ Supports various order types including market, limit, and stop orders.`,
 			Leverage: leverage,
 		}
 
-		if err := client.PlaceOrder(context.Background(), req); err != nil {
+		if _, err := client.AddOrder(context.Background(), req); err != nil {
 			return fmt.Errorf("failed to place order: %w", err)
 		}
 
