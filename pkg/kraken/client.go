@@ -309,10 +309,37 @@ func (c *Client) SubscribeToTicker(ctx context.Context, pair string, priceChan c
 		return fmt.Errorf("websocket connection not established")
 	}
 
+	// Start message handler
+	go func() {
+		for {
+			_, message, err := c.ws.ReadMessage()
+			if err != nil {
+				fmt.Printf("read error: %v\n", err)
+				return
+			}
+
+			var data []interface{}
+			if err := json.Unmarshal(message, &data); err == nil {
+				// Check if it's a ticker update
+				if len(data) > 1 {
+					if tickerData, ok := data[1].(map[string]interface{}); ok {
+						if c, ok := tickerData["c"].([]interface{}); ok && len(c) > 0 {
+							if priceStr, ok := c[0].(string); ok {
+								if price, err := strconv.ParseFloat(priceStr, 64); err == nil {
+									priceChan <- price
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}()
+
 	// Subscribe to ticker
 	subscribe := map[string]interface{}{
 		"event": "subscribe",
-		"pair":  []string{pair},
+		"pair":  []string{strings.ReplaceAll(pair, "/", "")},
 		"subscription": map[string]string{
 			"name": "ticker",
 		},
@@ -322,29 +349,7 @@ func (c *Client) SubscribeToTicker(ctx context.Context, pair string, priceChan c
 		return fmt.Errorf("failed to subscribe: %w", err)
 	}
 
-	// Wait for subscription confirmation
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for {
-			var msg map[string]interface{}
-			if err := c.ws.ReadJSON(&msg); err != nil {
-				return
-			}
-			if msg["event"] == "subscriptionStatus" && msg["status"] == "subscribed" {
-				return
-			}
-		}
-	}()
-
-	select {
-	case <-done:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(5 * time.Second):
-		return fmt.Errorf("subscription timeout")
-	}
+	return nil
 }
 
 func (c *Client) GetTickerPrice(ctx context.Context, pair string) (*TickerInfo, error) {
@@ -409,61 +414,36 @@ func calculateOrderVolumes(config TrailingEntryConfig) []float64 {
 }
 
 func (c *Client) ExecuteTrailingEntry(ctx context.Context, config TrailingEntryConfig) error {
-	// Establish WebSocket connection first
-	if err := c.ConnectWebSocket(ctx); err != nil {
-		return fmt.Errorf("failed to connect websocket: %w", err)
-	}
-	defer c.Close()
+	fmt.Printf("Placing %d %s orders between %.2f and %.2f...\n",
+		config.NumOrders, config.Side,
+		config.LowerBand, config.UpperBand, config.NumOrders, config.Side)
 
 	volumes := calculateOrderVolumes(config)
 	priceStep := (config.UpperBand - config.LowerBand) / float64(config.NumOrders-1)
 
-	priceChan := make(chan float64)
-	defer close(priceChan)
-
-	if err := c.SubscribeToTicker(ctx, config.Pair, priceChan); err != nil {
-		return fmt.Errorf("failed to subscribe to ticker: %w", err)
-	}
-
-	fmt.Printf("Watching for price between %.2f and %.2f to place %d %s orders...\n",
-		config.LowerBand, config.UpperBand, config.NumOrders, config.Side)
-
-	placedPrices := make(map[float64]bool)
-
-	for price := range priceChan {
-		if price >= config.LowerBand && price <= config.UpperBand {
-			for i := 0; i < config.NumOrders; i++ {
-				var orderPrice float64
-				if config.Side == "buy" {
-					orderPrice = config.UpperBand - (float64(i) * priceStep)
-				} else {
-					orderPrice = config.LowerBand + (float64(i) * priceStep)
-				}
-
-				if placedPrices[orderPrice] {
-					continue
-				}
-
-				req := OrderRequest{
-					Pair:   config.Pair,
-					Type:   LimitOrder,
-					Side:   config.Side,
-					Volume: strconv.FormatFloat(volumes[i], 'f', 8, 64),
-					Price:  strconv.FormatFloat(orderPrice, 'f', 2, 64),
-				}
-
-				if _, err := c.AddOrder(ctx, req); err != nil {
-					return fmt.Errorf("failed to place order: %w", err)
-				}
-
-				placedPrices[orderPrice] = true
-				fmt.Printf("Placed %s order: %v %v at %v\n",
-					config.Side, volumes[i], config.Pair, orderPrice)
-			}
-
-			// All orders placed, we're done
-			return nil
+	for i := 0; i < config.NumOrders; i++ {
+		var orderPrice float64
+		if config.Side == "buy" {
+			orderPrice = config.UpperBand - (float64(i) * priceStep)
+		} else {
+			orderPrice = config.LowerBand + (float64(i) * priceStep)
 		}
+
+		req := OrderRequest{
+			Pair:     config.Pair,
+			Type:     LimitOrder,
+			Side:     config.Side,
+			Volume:   strconv.FormatFloat(volumes[i], 'f', 8, 64),
+			Price:    strconv.FormatFloat(orderPrice, 'f', 2, 64),
+			Leverage: config.Leverage,
+		}
+
+		if _, err := c.AddOrder(ctx, req); err != nil {
+			return fmt.Errorf("failed to place order: %w", err)
+		}
+
+		fmt.Printf("Placed %s order: %v %v at %v\n",
+			config.Side, volumes[i], config.Pair, orderPrice)
 	}
 
 	return nil
