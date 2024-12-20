@@ -3,12 +3,13 @@ package kraken
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -19,29 +20,71 @@ type mockWSServer struct {
 	URL string
 }
 
-func newMockWSServer() *mockWSServer {
-	var upgrader = websocket.Upgrader{}
-	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := upgrader.Upgrade(w, r, nil)
+func newMockWSServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := websocket.Upgrader{}
+		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			return
 		}
-		defer c.Close()
+		defer conn.Close()
 
-		// Echo messages back
+		// Send initial subscription confirmation
+		subscriptionMsg := map[string]interface{}{
+			"event":  "subscriptionStatus",
+			"status": "subscribed",
+			"pair":   []string{"XBT/USD"},
+			"subscription": map[string]string{
+				"name": "ticker",
+			},
+		}
+		if err := conn.WriteJSON(subscriptionMsg); err != nil {
+			return
+		}
+
+		// Use a done channel for clean shutdown
+		done := make(chan struct{})
+		defer close(done)
+
+		// Send mock price updates
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+
 		for {
-			mt, message, err := c.ReadMessage()
-			if err != nil {
-				break
+			select {
+			case <-ticker.C:
+				priceMsg := []interface{}{
+					278,
+					map[string]interface{}{
+						"a": []string{"1000.00", "1", "1.000"},
+						"b": []string{"999.00", "1", "1.000"},
+					},
+					"ticker",
+					"XBT/USD",
+				}
+				if err := conn.WriteJSON(priceMsg); err != nil {
+					select {
+					case <-done:
+						return
+					default:
+						log.Printf("WebSocket write error: %v", err)
+					}
+					return
+				}
+			case <-done:
+				return
+			default:
+				// Check for client messages
+				_, _, err := conn.ReadMessage()
+				if err != nil {
+					if websocket.IsUnexpectedCloseError(err) {
+						close(done)
+					}
+					return
+				}
 			}
-			c.WriteMessage(mt, message)
 		}
 	}))
-
-	return &mockWSServer{
-		Server: s,
-		URL:    "ws" + strings.TrimPrefix(s.URL, "http"),
-	}
 }
 
 func TestClient_AddOrder(t *testing.T) {

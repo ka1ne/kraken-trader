@@ -13,6 +13,7 @@ type TestConfig struct {
 	DemoAPIURL    string
 	DemoWSURL     string
 	TestPair      string
+	WebSocketURL  string
 	Timeouts      struct {
 		WebSocket time.Duration
 		REST      time.Duration
@@ -22,8 +23,8 @@ type TestConfig struct {
 // LoadTestConfig loads test configuration from environment variables
 func LoadTestConfig(t *testing.T) *TestConfig {
 	cfg := &TestConfig{
-		DemoAPIKey:    os.Getenv("KRAKEN_DEMO_KEY"),
-		DemoAPISecret: os.Getenv("KRAKEN_DEMO_SECRET"),
+		DemoAPIKey:    os.Getenv("KRAKEN_API_KEY"),
+		DemoAPISecret: os.Getenv("KRAKEN_API_SECRET"),
 		DemoAPIURL:    "https://demo-futures.kraken.com/derivatives",
 		DemoWSURL:     "wss://demo-futures.kraken.com/ws/v1",
 		TestPair:      "PI_XBTUSD",

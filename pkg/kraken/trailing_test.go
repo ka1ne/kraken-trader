@@ -4,45 +4,67 @@ import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
 func TestExecuteTrailingEntry(t *testing.T) {
-	ws := newMockWSServer()
-	defer ws.Close()
+	t.Parallel()
 
-	client := NewClient("test", "test")
-	conn, _, err := websocket.DefaultDialer.Dial(ws.URL, nil)
-	if err != nil {
-		t.Fatalf("Failed to connect to test server: %v", err)
-	}
-	client.ws = conn
+	// Create test server and client
+	server := newMockWSServer()
+	defer server.Close()
+
+	client := NewTestClient(t, &TestConfig{
+		WebSocketURL: server.URL,
+		TestPair:     "XBT/USD",
+	})
 	defer client.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	config := TrailingEntryConfig{
-		Pair:        "XBTUSD",
-		Side:        "buy",
-		UpperBand:   52000,
-		LowerBand:   48000,
-		TotalVolume: 1.0,
-		NumOrders:   5,
-		Interval:    time.Second,
+	// Connect to websocket
+	if err := client.ConnectWebSocket(ctx); err != nil {
+		t.Fatalf("ConnectWebSocket() error = %v", err)
 	}
 
-	// Mock price updates
+	// Setup price channel and subscribe
+	priceChan := make(chan float64)
+	defer close(priceChan)
+
+	if err := client.SubscribeToTicker(ctx, "XBT/USD", priceChan); err != nil {
+		t.Fatalf("SubscribeToTicker() error = %v", err)
+	}
+
+	// Test parameters
+	params := TrailingEntryConfig{
+		Pair:         "XBT/USD",
+		Side:         "buy",
+		UpperBand:    1100.0,
+		LowerBand:    900.0,
+		TotalVolume:  1.0,
+		Distribution: "even",
+		NumOrders:    3,
+		Interval:     time.Second,
+	}
+
+	// Create done channel to signal test completion
+	done := make(chan struct{})
+	defer close(done)
+
+	// Run test with timeout
 	go func() {
-		time.Sleep(50 * time.Millisecond)
-		// Simulate price entering the band
-		// This would normally come from WebSocket
-		// but we're just testing the logic
+		err := client.ExecuteTrailingEntry(ctx, params)
+		if err != nil {
+			t.Errorf("ExecuteTrailingEntry() error = %v", err)
+		}
+		done <- struct{}{}
 	}()
 
-	err = client.ExecuteTrailingEntry(ctx, config)
-	if err != nil && err != context.DeadlineExceeded {
-		t.Errorf("ExecuteTrailingEntry() error = %v", err)
+	// Wait for test completion or timeout
+	select {
+	case <-done:
+		// Test completed successfully
+	case <-time.After(8 * time.Second):
+		t.Fatal("Test timed out")
 	}
 }

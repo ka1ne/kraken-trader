@@ -2,6 +2,8 @@ package kraken
 
 import (
 	"context"
+	"flag"
+	"os"
 	"testing"
 	"time"
 )
@@ -9,21 +11,34 @@ import (
 var testConfig *TestConfig
 
 func TestMain(m *testing.M) {
-	// Setup test environment
-	if testing.Short() {
-		return
-	}
+	// Parse test flags
+	flag.Parse()
+
+	// Only load config and run integration tests if not in short mode
 	testConfig = LoadTestConfig(nil)
-	m.Run()
+	result := m.Run()
+	os.Exit(result)
 }
 
 func skipIfNoAPIKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	if testConfig.DemoAPIKey == "" || testConfig.DemoAPISecret == "" {
 		t.Skip("Skipping integration test: API credentials required")
 	}
 }
 
+func TestIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration tests in short mode")
+	}
+}
+
 func TestIntegration_AddOrder(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	skipIfNoAPIKeys(t)
 
 	tests := []struct {
@@ -75,6 +90,9 @@ func TestIntegration_AddOrder(t *testing.T) {
 }
 
 func TestIntegration_WebSocketReconnect(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	skipIfNoAPIKeys(t)
 
 	client := NewTestClient(t, testConfig)
@@ -101,6 +119,9 @@ func TestIntegration_WebSocketReconnect(t *testing.T) {
 }
 
 func TestIntegration_TickerSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	skipIfNoAPIKeys(t)
 
 	client := NewTestClient(t, testConfig)

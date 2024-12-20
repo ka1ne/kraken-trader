@@ -69,3 +69,13 @@ func (r *OrderRequest) Validate() error {
 
 	return nil
 }
+
+type TrailingEntryParams struct {
+	Pair           string
+	Side           string
+	EntryPrice     float64
+	TrailingAmount float64
+	Volume         float64
+	Distribution   string
+	OrderCount     int
+}

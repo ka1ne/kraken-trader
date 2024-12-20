@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"log"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -38,6 +40,19 @@ func init() {
 
 	viper.BindPFlag("api.key", rootCmd.PersistentFlags().Lookup("api-key"))
 	viper.BindPFlag("api.secret", rootCmd.PersistentFlags().Lookup("api-secret"))
+
+	// Map environment variables
+	viper.SetEnvPrefix("KRAKEN")
+	viper.BindEnv("api.key", "KRAKEN_API_KEY")
+	viper.BindEnv("api.secret", "KRAKEN_API_SECRET")
+
+	// Load .env file
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: .env file not found")
+	}
+
+	rootCmd.AddCommand(orderCmd)
+	rootCmd.AddCommand(trailingCmd)
 }
 
 func initConfig() {

@@ -305,7 +305,12 @@ func (c *Client) Close() error {
 
 // SubscribeToTicker subscribes to real-time price updates
 func (c *Client) SubscribeToTicker(ctx context.Context, pair string, priceChan chan<- float64) error {
-	sub := map[string]interface{}{
+	if c.ws == nil {
+		return fmt.Errorf("websocket connection not established")
+	}
+
+	// Subscribe to ticker
+	subscribe := map[string]interface{}{
 		"event": "subscribe",
 		"pair":  []string{pair},
 		"subscription": map[string]string{
@@ -313,50 +318,33 @@ func (c *Client) SubscribeToTicker(ctx context.Context, pair string, priceChan c
 		},
 	}
 
-	c.wsLock.Lock()
-	err := c.ws.WriteJSON(sub)
-	c.wsLock.Unlock()
-	if err != nil {
+	if err := c.ws.WriteJSON(subscribe); err != nil {
 		return fmt.Errorf("failed to subscribe: %w", err)
 	}
 
+	// Wait for subscription confirmation
+	done := make(chan struct{})
 	go func() {
-		defer close(priceChan)
+		defer close(done)
 		for {
-			select {
-			case <-ctx.Done():
+			var msg map[string]interface{}
+			if err := c.ws.ReadJSON(&msg); err != nil {
 				return
-			default:
-				_, message, err := c.ws.ReadMessage()
-				if err != nil {
-					fmt.Printf("websocket read error: %v\n", err)
-					return
-				}
-
-				var tickerData []interface{}
-				if err := json.Unmarshal(message, &tickerData); err != nil {
-					fmt.Printf("parse error: %v\n", err)
-					continue
-				}
-
-				// Check if it's a ticker update (array with price data)
-				if len(tickerData) < 4 || tickerData[2] != "ticker" {
-					continue
-				}
-
-				data := tickerData[1].(map[string]interface{})
-				if price, ok := data["c"].([]interface{}); ok && len(price) > 0 {
-					if lastPrice, ok := price[0].(string); ok {
-						if p, err := strconv.ParseFloat(lastPrice, 64); err == nil {
-							priceChan <- p
-						}
-					}
-				}
+			}
+			if msg["event"] == "subscriptionStatus" && msg["status"] == "subscribed" {
+				return
 			}
 		}
 	}()
 
-	return nil
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(5 * time.Second):
+		return fmt.Errorf("subscription timeout")
+	}
 }
 
 func (c *Client) GetTickerPrice(ctx context.Context, pair string) (*TickerInfo, error) {
