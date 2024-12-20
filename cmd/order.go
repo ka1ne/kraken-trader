@@ -38,7 +38,7 @@ Supports various order types including market, limit, and stop orders.`,
 
 		req := kraken.OrderRequest{
 			Pair:     pair,
-			Type:     orderType,
+			Type:     kraken.OrderType(orderType),
 			Side:     side,
 			Volume:   volume,
 			Price:    price,

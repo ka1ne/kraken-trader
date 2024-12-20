@@ -21,10 +21,20 @@ import (
 )
 
 const (
-	APIURL       = "https://api.kraken.com"
-	WSS_URL      = "wss://ws-auth.kraken.com/v2"
-	API_VERSION  = "0"
-	REST_TIMEOUT = 10 * time.Second
+	APIURL            = "https://api.kraken.com"
+	WSS_URL           = "wss://ws-auth.kraken.com/v2"
+	API_VERSION       = "0"
+	REST_TIMEOUT      = 10 * time.Second
+	HeartbeatInterval = 10 * time.Second
+	ReconnectDelay    = 5 * time.Second
+)
+
+type ConnectionState int
+
+const (
+	Disconnected ConnectionState = iota
+	Connecting
+	Connected
 )
 
 type Client struct {
@@ -33,6 +43,9 @@ type Client struct {
 	httpClient *http.Client
 	ws         *websocket.Conn
 	wsLock     sync.Mutex
+	state      ConnectionState
+	stateLock  sync.RWMutex
+	done       chan struct{}
 }
 
 type TickerInfo struct {
@@ -80,12 +93,16 @@ func (c *Client) getSignature(path string, nonce string, postData string) string
 
 // AddOrder places a new order via REST API
 func (c *Client) AddOrder(ctx context.Context, req OrderRequest) (*OrderResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid order: %w", err)
+	}
+
 	endpoint := "/0/private/AddOrder"
 
 	// Create form data
 	data := url.Values{}
 	data.Set("nonce", strconv.FormatInt(time.Now().UnixNano(), 10))
-	data.Set("ordertype", req.Type)
+	data.Set("ordertype", string(req.Type))
 	data.Set("type", req.Side)
 	data.Set("volume", req.Volume)
 	data.Set("pair", req.Pair)
@@ -139,18 +156,99 @@ func (c *Client) AddOrder(ctx context.Context, req OrderRequest) (*OrderResponse
 }
 
 // ConnectWebSocket establishes WebSocket connection
-func (c *Client) ConnectWebSocket(ctx context.Context, token string) error {
+func (c *Client) ConnectWebSocket(ctx context.Context) error {
+	c.setState(Connecting)
+
 	dialer := websocket.Dialer{
 		HandshakeTimeout: 10 * time.Second,
 	}
 
 	conn, _, err := dialer.DialContext(ctx, WSS_URL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to connect to websocket: %w", err)
+		c.setState(Disconnected)
+		return fmt.Errorf("failed to connect: %w", err)
 	}
 
+	c.wsLock.Lock()
 	c.ws = conn
+	c.wsLock.Unlock()
+
+	c.setState(Connected)
+	c.done = make(chan struct{})
+
+	// Start heartbeat
+	go c.heartbeat(ctx)
+	// Start reconnection monitor
+	go c.monitorConnection(ctx)
+
 	return nil
+}
+
+func (c *Client) heartbeat(ctx context.Context) {
+	ticker := time.NewTicker(HeartbeatInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.done:
+			return
+		case <-ticker.C:
+			c.wsLock.Lock()
+			err := c.ws.WriteMessage(websocket.PingMessage, nil)
+			c.wsLock.Unlock()
+
+			if err != nil {
+				fmt.Printf("heartbeat failed: %v\n", err)
+				c.reconnect(ctx)
+			}
+		}
+	}
+}
+
+func (c *Client) monitorConnection(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.done:
+			return
+		default:
+			c.wsLock.Lock()
+			_, _, err := c.ws.ReadMessage()
+			c.wsLock.Unlock()
+
+			if err != nil {
+				fmt.Printf("connection error: %v\n", err)
+				c.reconnect(ctx)
+			}
+		}
+	}
+}
+
+func (c *Client) reconnect(ctx context.Context) {
+	if c.getState() == Connecting {
+		return
+	}
+
+	c.setState(Connecting)
+
+	// Close existing connection
+	c.Close()
+
+	// Attempt to reconnect with backoff
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if err := c.ConnectWebSocket(ctx); err == nil {
+				return
+			}
+			time.Sleep(ReconnectDelay)
+		}
+	}
 }
 
 // AddOrderWS places a new order via WebSocket API
@@ -360,7 +458,7 @@ func (c *Client) ExecuteTrailingEntry(ctx context.Context, config TrailingEntryC
 
 				req := OrderRequest{
 					Pair:   config.Pair,
-					Type:   "limit",
+					Type:   LimitOrder,
 					Side:   config.Side,
 					Volume: strconv.FormatFloat(volumes[i], 'f', 8, 64),
 					Price:  strconv.FormatFloat(orderPrice, 'f', 2, 64),
@@ -381,4 +479,16 @@ func (c *Client) ExecuteTrailingEntry(ctx context.Context, config TrailingEntryC
 	}
 
 	return nil
+}
+
+func (c *Client) setState(state ConnectionState) {
+	c.stateLock.Lock()
+	defer c.stateLock.Unlock()
+	c.state = state
+}
+
+func (c *Client) getState() ConnectionState {
+	c.stateLock.RLock()
+	defer c.stateLock.RUnlock()
+	return c.state
 }
