@@ -409,13 +409,24 @@ func calculateOrderVolumes(config TrailingEntryConfig) []float64 {
 }
 
 func (c *Client) ExecuteTrailingEntry(ctx context.Context, config TrailingEntryConfig) error {
+	// Establish WebSocket connection first
+	if err := c.ConnectWebSocket(ctx); err != nil {
+		return fmt.Errorf("failed to connect websocket: %w", err)
+	}
+	defer c.Close()
+
 	volumes := calculateOrderVolumes(config)
 	priceStep := (config.UpperBand - config.LowerBand) / float64(config.NumOrders-1)
 
 	priceChan := make(chan float64)
+	defer close(priceChan)
+
 	if err := c.SubscribeToTicker(ctx, config.Pair, priceChan); err != nil {
 		return fmt.Errorf("failed to subscribe to ticker: %w", err)
 	}
+
+	fmt.Printf("Watching for price between %.2f and %.2f to place %d %s orders...\n",
+		config.LowerBand, config.UpperBand, config.NumOrders, config.Side)
 
 	placedPrices := make(map[float64]bool)
 
