@@ -27,6 +27,10 @@ Supports various order types including market, limit, and stop orders.`,
 			return fmt.Errorf("side must be either 'buy' or 'sell'")
 		}
 
+		if !kraken.IsValidLeverage(leverage) {
+			return fmt.Errorf("invalid leverage: must be none, 2, 3, 4, or 5")
+		}
+
 		apiKey := viper.GetString("api.key")
 		apiSecret := viper.GetString("api.secret")
 
@@ -63,7 +67,7 @@ func init() {
 	orderCmd.Flags().StringVar(&pair, "pair", "", "Trading pair (e.g., XBTUSD)")
 	orderCmd.Flags().StringVar(&volume, "volume", "", "Order volume")
 	orderCmd.Flags().StringVar(&price, "price", "", "Order price")
-	orderCmd.Flags().StringVar(&leverage, "leverage", "", "Leverage (optional)")
+	orderCmd.Flags().StringVar(&leverage, "leverage", "none", "Leverage (none, 2, 3, 4, 5)")
 
 	orderCmd.MarkFlagRequired("side")
 	orderCmd.MarkFlagRequired("pair")

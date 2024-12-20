@@ -6,13 +6,13 @@ import (
 
 // REST API types
 type OrderRequest struct {
-	Pair      string
-	Type      OrderType // Using our new OrderType
-	Side      string
-	Volume    string
-	Price     string
-	Leverage  string
-	StopPrice string `json:"stop_price,omitempty"` // For stop orders
+	Pair       string
+	Type       OrderType
+	Side       string
+	Volume     string
+	Price      string
+	Leverage   string `json:"leverage,omitempty"`
+	OrderFlags string `json:"oflags,omitempty"`
 }
 
 type OrderResponse struct {
@@ -34,13 +34,30 @@ type WSOrderRequest struct {
 }
 
 type OrderType string
+type Leverage string
 
 const (
 	LimitOrder      OrderType = "limit"
 	MarketOrder     OrderType = "market"
 	StopLossOrder   OrderType = "stop-loss"
 	TakeProfitOrder OrderType = "take-profit"
+
+	// Leverage options
+	NoLeverage Leverage = "none"
+	Leverage2x Leverage = "2"
+	Leverage3x Leverage = "3"
+	Leverage4x Leverage = "4"
+	Leverage5x Leverage = "5"
 )
+
+func IsValidLeverage(l string) bool {
+	switch Leverage(l) {
+	case NoLeverage, Leverage2x, Leverage3x, Leverage4x, Leverage5x:
+		return true
+	default:
+		return false
+	}
+}
 
 // Add validation
 func (r *OrderRequest) Validate() error {
@@ -48,10 +65,6 @@ func (r *OrderRequest) Validate() error {
 	case LimitOrder:
 		if r.Price == "" {
 			return fmt.Errorf("price is required for limit orders")
-		}
-	case StopLossOrder, TakeProfitOrder:
-		if r.StopPrice == "" {
-			return fmt.Errorf("stop price is required for stop orders")
 		}
 	case MarketOrder:
 		// Market orders don't need price
@@ -65,6 +78,10 @@ func (r *OrderRequest) Validate() error {
 
 	if r.Volume == "" {
 		return fmt.Errorf("volume is required")
+	}
+
+	if r.Leverage != "" && !IsValidLeverage(r.Leverage) {
+		return fmt.Errorf("invalid leverage: must be none, 2, 3, 4, or 5")
 	}
 
 	return nil
