@@ -227,16 +227,31 @@ func (c *Client) SubscribeToTicker(ctx context.Context, pair string, priceChan c
 			case <-ctx.Done():
 				return
 			default:
-				_, _, err := c.ws.ReadMessage()
+				_, message, err := c.ws.ReadMessage()
 				if err != nil {
 					fmt.Printf("websocket read error: %v\n", err)
 					return
 				}
 
-				// Parse message and send price updates
-				// TODO: Implement proper message parsing
-				// This is where we'd parse the WebSocket message and send the price
-				// to priceChan
+				var tickerData []interface{}
+				if err := json.Unmarshal(message, &tickerData); err != nil {
+					fmt.Printf("parse error: %v\n", err)
+					continue
+				}
+
+				// Check if it's a ticker update (array with price data)
+				if len(tickerData) < 4 || tickerData[2] != "ticker" {
+					continue
+				}
+
+				data := tickerData[1].(map[string]interface{})
+				if price, ok := data["c"].([]interface{}); ok && len(price) > 0 {
+					if lastPrice, ok := price[0].(string); ok {
+						if p, err := strconv.ParseFloat(lastPrice, 64); err == nil {
+							priceChan <- p
+						}
+					}
+				}
 			}
 		}
 	}()
