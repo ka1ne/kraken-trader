@@ -4,10 +4,22 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 func TestExecuteTrailingEntry(t *testing.T) {
+	ws := newMockWSServer()
+	defer ws.Close()
+
 	client := NewClient("test", "test")
+	conn, _, err := websocket.DefaultDialer.Dial(ws.URL, nil)
+	if err != nil {
+		t.Fatalf("Failed to connect to test server: %v", err)
+	}
+	client.ws = conn
+	defer client.Close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
@@ -29,7 +41,7 @@ func TestExecuteTrailingEntry(t *testing.T) {
 		// but we're just testing the logic
 	}()
 
-	err := client.ExecuteTrailingEntry(ctx, config)
+	err = client.ExecuteTrailingEntry(ctx, config)
 	if err != nil && err != context.DeadlineExceeded {
 		t.Errorf("ExecuteTrailingEntry() error = %v", err)
 	}

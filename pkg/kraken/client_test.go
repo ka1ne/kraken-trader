@@ -47,6 +47,11 @@ func newMockWSServer() *mockWSServer {
 func TestClient_AddOrder(t *testing.T) {
 	// Mock HTTP server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify API key
+		if r.Header.Get("API-Key") != "test" {
+			w.Write([]byte(`{"error":["EAPI:Invalid key"]}`))
+			return
+		}
 		if r.URL.Path != "/0/private/AddOrder" {
 			t.Errorf("Expected to request '/0/private/AddOrder', got: %s", r.URL.Path)
 		}
@@ -72,6 +77,7 @@ func TestClient_AddOrder(t *testing.T) {
 		httpClient: &http.Client{
 			Timeout: REST_TIMEOUT,
 		},
+		apiURL: server.URL,
 	}
 
 	req := OrderRequest{
@@ -97,11 +103,11 @@ func TestClient_WebSocketConnection(t *testing.T) {
 	defer ws.Close()
 
 	client := NewClient("test", "test")
-	conn, _, err := websocket.DefaultDialer.Dial(ws.URL, nil)
+	var err error
+	client.ws, _, err = websocket.DefaultDialer.Dial(ws.URL, nil)
 	if err != nil {
 		t.Fatalf("Failed to connect to test server: %v", err)
 	}
-	client.ws = conn
 	ctx := context.Background()
 
 	// Test subscription
